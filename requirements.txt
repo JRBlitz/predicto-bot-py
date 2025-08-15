@@ -1,10 +1,9 @@
-# Core Polymarket dependencies (official repos)
+# Core Polymarket dependencies
 py-clob-client>=0.20.0
 
 # Web3 and blockchain dependencies
 web3>=6.0.0
 eth-account>=0.9.0
-eth-utils>=2.0.0
 
 # HTTP client for API calls
 requests>=2.28.0
@@ -16,18 +15,9 @@ numpy>=1.24.0
 
 # Environment and configuration
 python-dotenv>=1.0.0
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
 
-# Logging and monitoring
+# Logging
 loguru>=0.7.0
 
-# Web UI dependencies
-fastapi>=0.104.0
-uvicorn>=0.24.0
-websockets>=12.0
-jinja2>=3.1.0
-
-# Optional: For advanced strategies
-scikit-learn>=1.3.0
-ta>=0.10.0  # Technical analysis
+# Date utilities
+python-dateutil>=2.8.0

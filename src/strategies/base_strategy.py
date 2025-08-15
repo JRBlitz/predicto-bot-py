@@ -77,7 +77,8 @@ class BaseStrategy(ABC):
     async def run(self):
         """Main strategy loop."""
         self.is_running = True
-        logger.info(f"Starting strategy: {self.name}")
+        crypto_mode = self.config.get('crypto_optimized', False)
+        logger.info(f"Starting strategy: {self.name} (Crypto-optimized: {crypto_mode})")
         
         while self.is_running:
             try:
@@ -86,10 +87,14 @@ class BaseStrategy(ABC):
                 
                 # Handle different market data structures
                 if isinstance(markets, list) and len(markets) > 0:
-                    # Take first few markets for testing
-                    markets_to_process = markets[:5]  # Limit to 5 markets
+                    # Take first few markets for testing, more for crypto-optimized
+                    market_limit = 10 if crypto_mode else 5
+                    markets_to_process = markets[:market_limit]
+                    logger.info(f"Processing {len(markets_to_process)} markets (crypto-optimized: {crypto_mode})")
                 elif isinstance(markets, dict):
-                    markets_to_process = [markets[key] for key in list(markets.keys())[:5]]
+                    market_limit = 10 if crypto_mode else 5
+                    markets_to_process = [markets[key] for key in list(markets.keys())[:market_limit]]
+                    logger.info(f"Processing {len(markets_to_process)} markets (crypto-optimized: {crypto_mode})")
                 else:
                     logger.warning("No markets available or unexpected format")
                     await asyncio.sleep(self.config.get('interval', 60))
@@ -120,11 +125,12 @@ class BaseStrategy(ABC):
                         # Check for entry signals
                         if await self.should_enter_position(signals):
                             size = await self.calculate_position_size(signals)
+                            trade_price = signals.get('price', signals.get('current_price', 0.5))
                             await self.execute_trade(
                                 market_id=market_id,
                                 side=signals.get('side', 'BUY'),
                                 size=size,
-                                price=signals.get('price', 0.5)
+                                price=trade_price
                             )
                         
                         # Check for exit signals
@@ -132,11 +138,12 @@ class BaseStrategy(ABC):
                         for position in positions:
                             if position.get('market_id') == market_id:
                                 if await self.should_exit_position(position, signals):
+                                    exit_price = signals.get('exit_price', signals.get('current_price', 0.5))
                                     await self.execute_trade(
                                         market_id=market_id,
                                         side='SELL' if position.get('side') == 'BUY' else 'BUY',
                                         size=abs(float(position.get('size', 0))),
-                                        price=signals.get('exit_price', 0.5)
+                                        price=exit_price
                                     )
                     
                     except Exception as market_error:

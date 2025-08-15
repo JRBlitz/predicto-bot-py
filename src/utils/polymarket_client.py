@@ -4,6 +4,19 @@ Polymarket CLOB client wrapper for trading operations.
 from typing import Dict, List, Optional, Any
 import asyncio
 from loguru import logger
+# Simplified settings for crypto-only mode
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+class Settings:
+    crypto_only_mode = True
+    allowed_market_keywords = [
+        "bitcoin", "btc", "ethereum", "eth", "crypto", "cryptocurrency",
+        "blockchain", "defi", "solana", "sol", "xrp", "ripple"
+    ]
+
+settings = Settings()
 
 # Import Polymarket libraries
 try:
@@ -22,6 +35,8 @@ class PolymarketTradingClient:
         self.host = host
         self.client = None
         self.test_mode = test_mode
+        self.crypto_only_mode = settings.crypto_only_mode
+        self.allowed_keywords = [kw.lower() for kw in settings.allowed_market_keywords]
         
     async def initialize(self):
         """Initialize the client."""
@@ -39,14 +54,67 @@ class PolymarketTradingClient:
             logger.error(f"Failed to initialize Polymarket client: {e}")
             raise
     
+    def _is_crypto_market(self, market: Dict[str, Any]) -> bool:
+        """Check if a market is crypto-related based on keywords."""
+        if not self.crypto_only_mode:
+            return True
+            
+        # Extract market information for keyword matching
+        market_text = ""
+        
+        # Check various fields that might contain market description
+        for field in ['question', 'title', 'description', 'market_slug', 'slug']:
+            if field in market and market[field]:
+                market_text += f" {market[field]}".lower()
+        
+        # Check if any crypto keywords are present
+        return any(keyword in market_text for keyword in self.allowed_keywords)
+    
     async def get_markets(self) -> List[Dict[str, Any]]:
-        """Get available markets."""
+        """Get available markets, filtered for crypto if crypto_only_mode is enabled."""
         try:
-            # Fix: Use the correct async method
+            # Get markets from Polymarket API
             markets = self.client.get_markets()
             if hasattr(markets, '__await__'):
                 markets = await markets
-            return markets
+            
+            logger.info(f"Raw markets response type: {type(markets)}")
+            
+            if not markets:
+                logger.warning("No markets returned from API")
+                return []
+            
+            # Handle different response formats
+            market_list = []
+            
+            if isinstance(markets, list):
+                market_list = markets
+            elif isinstance(markets, dict):
+                # Convert dict to list of market objects
+                if 'data' in markets:
+                    market_list = markets['data'] if isinstance(markets['data'], list) else []
+                elif 'markets' in markets:
+                    market_list = markets['markets'] if isinstance(markets['markets'], list) else []
+                else:
+                    # Assume dict values are market objects
+                    market_list = list(markets.values())
+            else:
+                logger.warning(f"Unexpected markets format: {type(markets)}")
+                return []
+            
+            logger.info(f"Processing {len(market_list)} markets")
+            
+            # Apply crypto filtering if enabled
+            if self.crypto_only_mode and market_list:
+                filtered_markets = []
+                for market in market_list:
+                    if isinstance(market, dict) and self._is_crypto_market(market):
+                        filtered_markets.append(market)
+                
+                logger.info(f"Filtered {len(market_list)} markets down to {len(filtered_markets)} crypto markets")
+                return filtered_markets
+            
+            return market_list
         except Exception as e:
             logger.error(f"Failed to get markets: {e}")
             return []
