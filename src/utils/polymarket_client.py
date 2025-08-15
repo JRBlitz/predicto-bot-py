@@ -9,28 +9,22 @@ from loguru import logger
 try:
     from py_clob_client.client import ClobClient
     from py_clob_client.constants import POLYGON
-    from py_order_utils.order_builder.constants import BUY, SELL
-    from py_order_utils.order_builder.order_builder import OrderBuilder
-    from py_order_utils.order_builder.order_converter import OrderConverter
-    from py_order_utils.order_builder.order_parser import OrderParser
-except ImportError:
-    logger.warning("Polymarket libraries not installed. Install from requirements.txt")
+except ImportError as e:
+    logger.warning(f"Polymarket libraries not installed: {e}")
 
 
 class PolymarketTradingClient:
     """Wrapper for Polymarket CLOB trading operations."""
     
-    def __init__(self, private_key: str, host: str = "https://clob.polymarket.com"):
+    def __init__(self, private_key: str, host: str = "https://clob.polymarket.com", test_mode: bool = True):
         """Initialize the trading client."""
         self.private_key = private_key
         self.host = host
         self.client = None
-        self.order_builder = None
-        self.order_converter = None
-        self.order_parser = None
+        self.test_mode = test_mode
         
     async def initialize(self):
-        """Initialize the client and order utilities."""
+        """Initialize the client."""
         try:
             # Initialize CLOB client
             self.client = ClobClient(
@@ -39,12 +33,7 @@ class PolymarketTradingClient:
                 chain_id=POLYGON
             )
             
-            # Initialize order utilities
-            self.order_builder = OrderBuilder()
-            self.order_converter = OrderConverter()
-            self.order_parser = OrderParser()
-            
-            logger.info("Polymarket trading client initialized successfully")
+            logger.info(f"Polymarket trading client initialized successfully (Test Mode: {self.test_mode})")
             
         except Exception as e:
             logger.error(f"Failed to initialize Polymarket client: {e}")
@@ -53,7 +42,10 @@ class PolymarketTradingClient:
     async def get_markets(self) -> List[Dict[str, Any]]:
         """Get available markets."""
         try:
-            markets = await self.client.get_markets()
+            # Fix: Use the correct async method
+            markets = self.client.get_markets()
+            if hasattr(markets, '__await__'):
+                markets = await markets
             return markets
         except Exception as e:
             logger.error(f"Failed to get markets: {e}")
@@ -62,7 +54,9 @@ class PolymarketTradingClient:
     async def get_orderbook(self, market_id: str) -> Dict[str, Any]:
         """Get order book for a specific market."""
         try:
-            orderbook = await self.client.get_orderbook(market_id)
+            orderbook = self.client.get_orderbook(market_id)
+            if hasattr(orderbook, '__await__'):
+                orderbook = await orderbook
             return orderbook
         except Exception as e:
             logger.error(f"Failed to get orderbook for {market_id}: {e}")
@@ -78,20 +72,27 @@ class PolymarketTradingClient:
     ) -> Optional[Dict[str, Any]]:
         """Place a limit order."""
         try:
-            # Build the order
-            order = self.order_builder.build_order(
-                market_id=market_id,
-                side=side,
-                size=size,
-                price=price,
-                post_only=post_only
-            )
+            if self.test_mode:
+                logger.info(f"🧪 TEST MODE: Would place {side} order - {size} @ {price} for market {market_id}")
+                return {
+                    "test_mode": True,
+                    "order_id": f"test_{market_id}_{side}_{size}_{price}",
+                    "status": "test_order_placed"
+                }
             
-            # Convert to API format
-            api_order = self.order_converter.to_api_order(order)
+            # Create order payload
+            order_payload = {
+                "market_id": market_id,
+                "side": side,
+                "size": size,
+                "price": price,
+                "post_only": post_only
+            }
             
             # Place the order
-            response = await self.client.post_order(api_order)
+            response = self.client.post_order(order_payload)
+            if hasattr(response, '__await__'):
+                response = await response
             
             logger.info(f"Order placed successfully: {response}")
             return response
@@ -103,7 +104,14 @@ class PolymarketTradingClient:
     async def cancel_order(self, order_id: str) -> bool:
         """Cancel an existing order."""
         try:
-            await self.client.delete_order(order_id)
+            if self.test_mode:
+                logger.info(f"🧪 TEST MODE: Would cancel order {order_id}")
+                return True
+            
+            response = self.client.delete_order(order_id)
+            if hasattr(response, '__await__'):
+                response = await response
+            
             logger.info(f"Order {order_id} cancelled successfully")
             return True
         except Exception as e:
@@ -113,7 +121,9 @@ class PolymarketTradingClient:
     async def get_positions(self) -> List[Dict[str, Any]]:
         """Get current positions."""
         try:
-            positions = await self.client.get_positions()
+            positions = self.client.get_positions()
+            if hasattr(positions, '__await__'):
+                positions = await positions
             return positions
         except Exception as e:
             logger.error(f"Failed to get positions: {e}")
@@ -122,7 +132,9 @@ class PolymarketTradingClient:
     async def get_orders(self) -> List[Dict[str, Any]]:
         """Get open orders."""
         try:
-            orders = await self.client.get_orders()
+            orders = self.client.get_orders()
+            if hasattr(orders, '__await__'):
+                orders = await orders
             return orders
         except Exception as e:
             logger.error(f"Failed to get orders: {e}")

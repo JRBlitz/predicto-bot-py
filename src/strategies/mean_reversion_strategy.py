@@ -20,8 +20,17 @@ class MeanReversionStrategy(BaseStrategy):
     
     async def analyze_market(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze market data for mean reversion opportunities."""
-        market_id = market_data['market']['id']
+        market = market_data['market']
         orderbook = market_data['orderbook']
+        
+        # Handle different market ID formats
+        if isinstance(market, dict):
+            market_id = market.get('id') or market.get('market_id') or market.get('token_id')
+        else:
+            return {'signal': 'HOLD', 'confidence': 0}
+        
+        if not market_id:
+            return {'signal': 'HOLD', 'confidence': 0}
         
         # Calculate current mid price
         if orderbook.get('bids') and orderbook.get('asks'):
